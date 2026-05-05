@@ -9,3 +9,5 @@ dist/
 build/
 .vscode/
 .idea/
+
+dataset/train.csv
