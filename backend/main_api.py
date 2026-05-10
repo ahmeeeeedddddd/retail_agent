@@ -158,22 +158,27 @@ async def run_full_pipeline():
             action_path = react_result.get('path', 'Monitor')
             best_action = react_result.get('action', 'No Action')
             
+            import datetime
+            live_time = datetime.datetime.now().strftime('%I:%M:%S %p')
             global_state["actionLog"].append({
-                "timestamp": "Live",
+                "timestamp": live_time,
                 "product": str(target_sample['family'].values[0]),
                 "path": action_path,
                 "action": best_action,
-                "score": react_result.get('score', 0.5)
+                "score": react_result.get('score', 0.5),
+                "telemetry": react_result,
+                "thoughts": global_state["agent_thoughts"]
             })
 
-            # Trigger SMTP Email Alert if action is Restock
-            if best_action == "Restock":
-                from step5_action import send_restock_email
-                send_restock_email(
-                    product_id=str(target_sample['family'].values[0]),
-                    store_id=str(target_sample['store_nbr'].values[0]),
-                    units=50
-                )
+            # Trigger SMTP Email Alert for all Actions
+            from step5_action import send_action_email
+            send_action_email(
+                product_id=str(target_sample['family'].values[0]),
+                store_id=str(target_sample['store_nbr'].values[0]),
+                units=50,
+                action=best_action,
+                context=react_result
+            )
 
             # --- DRIFT DETECTION (Outer Loop) ---
             global_state["drift_signals"]["svm_gap_history"].append(gap)
@@ -234,7 +239,7 @@ async def run_full_pipeline():
             traceback.print_exc()
             logging.error(f"Pipeline Failed: {e}")
             
-        await asyncio.sleep(300) # Wait 5 minutes
+        await asyncio.sleep(15) # Sped up from 5 minutes for dynamic visual dashboard demo
 
 @app.get("/")
 def read_root():

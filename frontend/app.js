@@ -24,6 +24,7 @@ function setupNav() {
         Analytics:  document.getElementById('analytics-view'),
         Reports:    document.getElementById('reports-view'),
         Trends:     document.getElementById('trends-view'),
+        Auditing:   document.getElementById('auditing-view'),
     };
     const incomingSection = document.querySelector('.incoming-data-section');
 
@@ -120,11 +121,8 @@ function updateZone2(data) {
 // ─── Zone 3: ReAct Dispatch ───────────────────────────────────────────────────
 function updateZone3(data) {
     const tel = data.telemetry || {};
-    console.log('[Zone 3] path:', tel.path, '| action:', tel.action, '| thoughts:', data.thoughts);
-
-    setText('reactPathDisplay',   tel.path   || 'IDLE');
-    setText('reactActionDisplay', tel.action || 'Monitoring...');
-    setText('agentThoughts',      data.thoughts ? `"${data.thoughts}"` : '"Statistical analysis running..."');
+    setText('latestActionDisplay', tel.action ? `Latest Action: ${tel.action}` : 'Latest Action: Waiting...');
+    setText('agentThoughts', data.thoughts ? `"${data.thoughts}"` : '"Statistical analysis running..."');
 }
 
 // ─── Zone 6: Alerts & Action Log ─────────────────────────────────────────────
@@ -141,6 +139,8 @@ function updateZone6(data) {
     setText('outcomeLog', 'Outcome: ' + (data.outcome || 'Observant'));
 
     const tbody = document.getElementById('miniActionLog');
+    const fullLogBody = document.getElementById('fullAuditLogTable');
+    
     if (tbody) {
         tbody.innerHTML = '';
         if (logs.length === 0) {
@@ -150,6 +150,48 @@ function updateZone6(data) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${entry.product || '--'}</td><td>${entry.action || '--'}</td><td>${entry.score !== undefined ? entry.score : (tel.intensity || '--')}</td>`;
                 tbody.appendChild(tr);
+            });
+        }
+    }
+    
+    // Update Full Audit Table
+    if (fullLogBody) {
+        if (logs.length === 0) {
+            fullLogBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-sec);">Waiting for inner loops to run...</td></tr>';
+        } else {
+            // Only rebuild if the number of logs changed to avoid visual flickering on every 5s poll
+            if (fullLogBody.children.length === 1 && fullLogBody.innerHTML.includes('Waiting')) {
+                 fullLogBody.innerHTML = '';
+            }
+            
+            // Re-render completely for simplicity, reverse chronological
+            fullLogBody.innerHTML = '';
+            logs.slice().reverse().forEach(entry => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid rgba(142, 149, 163, 0.1)';
+                
+                let signalsStr = 'S:-- | Gap:-- | μ:-- | Trend:-- | Cos:--';
+                let thoughtsStr = entry.thoughts || "Statistical routing executed.";
+                
+                if (entry.telemetry) {
+                     signalsStr = `S:${entry.telemetry.s_severity || 0} | Gap:${entry.telemetry.gap || 0} | μ:${entry.telemetry.mu || 0} | T:${entry.telemetry.arima_trend || 0} | Cos:${entry.telemetry.reliability || 0}`;
+                }
+                
+                // Highlight action colors
+                let actionColor = 'var(--text-primary)';
+                if (entry.action.includes('Restock') || entry.action.includes('High-Priority')) actionColor = 'var(--color-green)';
+                else if (entry.action.includes('Human') || entry.action.includes('Escalate')) actionColor = 'var(--color-red)';
+
+                tr.innerHTML = `
+                    <td style="padding: 12px; color: var(--text-sec);">${entry.timestamp || '--'}</td>
+                    <td style="padding: 12px; font-weight: 500;">${entry.product || '--'}</td>
+                    <td style="padding: 12px; color: var(--accent-blue);">${entry.path || '--'}</td>
+                    <td style="padding: 12px; font-weight: bold; color: ${actionColor};">${entry.action || '--'}</td>
+                    <td style="padding: 12px;"><strong>${entry.score !== undefined ? entry.score : (tel.intensity || '--')}</strong></td>
+                    <td style="padding: 12px; color: var(--text-sec); font-family: monospace; font-size: 0.9em;">${signalsStr}</td>
+                    <td style="padding: 12px; font-style: italic; color: #a3a8b3;">${thoughtsStr}</td>
+                `;
+                fullLogBody.appendChild(tr);
             });
         }
     }
@@ -218,14 +260,24 @@ function updateAnalyticsView(data) {
 // ─── Charts ───────────────────────────────────────────────────────────────────
 function renderAllCharts(data) {
     if (data.clusters)      renderClusterChart(data.clusters);
-    if (data.shapImportance) renderShapChart(data.shapImportance);
+    if (data.shapImportance) renderShapChart(data);
     if (data.sarimaForecast) renderSarimaChart(data.sarimaForecast);
+    if (data.actionLog)     renderDispatchChart(data);
 }
 
-function renderShapChart(data) {
+function renderShapChart(payload) {
+    const data = payload.shapImportance || {};
+    const tel = payload.telemetry || {};
+    const logs = payload.actionLog || [];
+
     const ctx = getCtx('shapChart');
     if (!ctx) { console.warn('[Zone 4] shapChart canvas not found'); return; }
     if (charts.shap) charts.shap.destroy();
+
+    let uncertain = logs.filter(l => l.telemetry && l.telemetry.reliability < 0.55).length;
+    let pct = logs.length > 0 ? ((uncertain / logs.length) * 100).toFixed(1) : 0;
+    setText('shapCosineText', tel.reliability !== undefined ? tel.reliability : '--');
+    setText('shapUncertainText', pct);
 
     const vals = (data.values || []).map(v => Math.abs(v));
     const maxVal = Math.max(...vals);
@@ -260,6 +312,45 @@ function renderShapChart(data) {
         }
     });
     renderCategoryChart();
+}
+
+function renderDispatchChart(data) {
+    const ctx = getCtx('dispatchChart');
+    if (!ctx) return;
+    if (charts.dispatch) charts.dispatch.destroy();
+
+    const logs = data.actionLog || [];
+    let counts = { 'Direct Exec': 0, 'Verify/RAG': 0, 'Human/Wait': 0, 'Dropout': 0 };
+
+    logs.forEach(log => {
+        if (!log.path) return;
+        if (log.path.includes('Step 1')) counts['Direct Exec']++;
+        else if (log.path.includes('Step 2') || log.path.includes('Step 3')) counts['Verify/RAG']++;
+        else if (log.path.includes('Step 4') || log.path.includes('Step 5') || log.path.includes('Tie')) counts['Human/Wait']++;
+        else counts['Dropout']++;
+    });
+
+    charts.dispatch = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(counts),
+            datasets: [{
+                data: Object.values(counts),
+                backgroundColor: ['#23C16B', '#3E8BFF', '#FF9B26', '#EE5D50'],
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(142, 149, 163, 0.1)' }, beginAtZero: true },
+                y: { grid: { display: false } }
+            }
+        }
+    });
 }
 
 function renderCategoryChart() {

@@ -55,9 +55,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-def send_restock_email(product_id, store_id, units):
+def send_action_email(product_id, store_id, units, action, context=None):
     """
-    Sends a restock alert via SMTP (Mailtrap or Gmail).
+    Sends an action alert via SMTP.
     """
     # Prefer Production Gmail if provided, fallback to Mailtrap Sandbox
     smtp_host = os.getenv("GMAIL_SMTP_HOST") or os.getenv("SMTP_HOST")
@@ -74,18 +74,31 @@ def send_restock_email(product_id, store_id, units):
 
     # Create message
     message = MIMEMultipart("alternative")
-    message["Subject"] = f"CRITICAL RESTOCK ALERT: {product_id} at Store {store_id}"
+    message["Subject"] = f"AGENTIC ACTION: {action} on {product_id}"
     message["From"] = from_email
     message["To"] = to_email
 
+    context_html = ""
+    if context:
+        context_html = f"""
+        <div style="background-color: #f8f9fa; border-left: 4px solid #3b82f6; padding: 15px; margin-top: 20px;">
+            <h3 style="margin-top: 0; color: #3b82f6;">RetailMind AI Reasoning Log</h3>
+            <p><strong>Routing Path:</strong> {context.get('path', 'N/A')}</p>
+            <p><strong>Intelligent Score:</strong> {context.get('score', 'N/A')} | <strong>Reliability:</strong> {context.get('reliability', 'N/A')}</p>
+            <hr style="border: none; border-top: 1px solid #ddd;"/>
+            <p><strong>Agent Thought:</strong> <em>"{context.get('thoughts', 'N/A')}"</em></p>
+        </div>
+        """
+
     html_content = f"""
     <html>
-    <body>
-        <h2>Critical Restock Needed</h2>
-        <p>Product <strong>{product_id}</strong> at Store <strong>{store_id}</strong> is understocked.</p>
-        <p>Recommended restock quantity: <strong>~{units} units</strong></p>
-        <hr/>
-        <p><small>RetailMind Autonomous Agent Action</small></p>
+    <body style="font-family: sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #3b82f6;">Autonomous Action Execution</h2>
+        <p>Product <strong>{product_id}</strong> at Store <strong>{store_id}</strong> was evaluated.</p>
+        <p>Determined Action: <strong style="color: coral;">{action}</strong></p>
+        {context_html}
+        <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;"/>
+        <p style="color: #9ca3af; font-size: 12px;">This is an automated tactical action dispatched by the SRA RetailMind Autonomous Agent.</p>
     </body>
     </html>
     """
