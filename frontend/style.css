@@ -1,16 +1,16 @@
 :root {
-    --bg-color: #0E1015;
-    --sidebar-bg: #12141A;
-    --card-bg: #171A21;
-    --card-border: #21252D;
-    --text-primary: #FFFFFF;
-    --text-sec: #8E95A3;
-    --accent-blue: #3E8BFF;
-    --accent-blue-hover: #296ADB;
-    --color-green: #23C16B;
-    --color-red: #FF4D4D;
-    --color-orange: #FF9B26;
-    --color-yellow: #FFC933;
+    --bg-color: #F4F7FE;
+    --sidebar-bg: #FFFFFF;
+    --card-bg: #FFFFFF;
+    --card-border: #E2E8F0;
+    --text-primary: #2B3674;
+    --text-sec: #A3AED0;
+    --accent-blue: #4318FF;
+    --accent-blue-hover: #3311DB;
+    --color-green: #05CD99;
+    --color-red: #EE5D50;
+    --color-orange: #FFCE20;
+    --color-yellow: #FFCE20;
 }
 
 * {
@@ -306,16 +306,163 @@ td {
     font-weight: 600;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-    width: 6px;
+/* Advanced 6-Zone Grid */
+.advanced-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: 1fr 1fr;
+    gap: 20px;
+    height: calc(100vh - 110px);
 }
 
-::-webkit-scrollbar-track {
-    background: transparent;
+.zone-card {
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+    transition: transform 0.3s ease;
 }
 
-::-webkit-scrollbar-thumb {
-    background: var(--card-border);
-    border-radius: 3px;
+.zone-card:hover { rotate: 0.5deg; border-color: var(--accent-blue); }
+
+.zone-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-sec);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.chart-container-zone {
+    flex: 1;
+    position: relative;
+    min-height: 120px;
+}
+
+/* Zone 2: Scoring */
+.scoring-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.score-signal {
+    font-size: 13px;
+    color: var(--text-sec);
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed var(--card-border);
+}
+
+.score-signal span {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.total-score {
+    margin-top: 10px;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--accent-blue);
+    text-align: center;
+    background: rgba(62, 139, 255, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+}
+
+/* Zone 3: ReAct */
+.react-step-container {
+    display: flex;
+    justify-content: space-around;
+    padding: 20px 0;
+}
+
+.step {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-sec);
+}
+
+.step.active {
+    color: var(--color-orange);
+    text-shadow: 0 0 10px rgba(255, 155, 38, 0.5);
+}
+
+.arrow { margin-left: 10px; color: var(--card-border); }
+
+.dispatch-action {
+    color: var(--color-green);
+    border-left: 3px solid var(--color-green);
+    margin-bottom: 10px;
+}
+
+.agent-thought-bubble {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text-sec);
+    padding: 10px;
+    background: rgba(67, 24, 255, 0.03);
+    border-radius: 8px;
+    line-height: 1.4;
+    border: 1px dashed var(--card-border);
+}
+
+/* Zone 6: Alerts */
+.alert-feed {
+    margin-bottom: 15px;
+}
+
+.alert-item { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+.outcome-log { font-size: 12px; color: var(--text-sec); font-style: italic; }
+
+.mini-table-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.mini-table-container th { font-size: 10px; }
+.mini-table-container td { font-size: 11px; }
+
+/* Scraped Data Section */
+.incoming-data-section {
+    padding: 20px 30px 0 30px;
+}
+
+.scraped-data-collapse {
+    background-color: var(--card-bg);
+    border: 1px solid var(--accent-blue);
+    border-radius: 8px;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+.scraped-data-collapse summary {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent-blue);
+    outline: none;
+}
+
+.scraped-data-content {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--card-border);
+}
+
+.scraped-data-content ul {
+    list-style: none;
+    font-size: 13px;
+    color: var(--text-sec);
+}
+
+.scraped-data-content ul li {
+    margin-bottom: 5px;
+}
+
+.scraped-data-content ul li span {
+    color: var(--text-primary);
+    font-weight: 700;
 }

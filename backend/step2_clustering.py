@@ -72,5 +72,39 @@ def perform_clustering(df):
     core_df = agg_df[core_mask].copy()
     core_df['cluster_state'] = semantic_labels
     
-    return core_df, scaler
+    # Return everything needed for the Training Cycle
+    return core_df, scaler, cntr
+
+def predict_membership(X_new_scaled, centroids):
+    """
+    Live Cycle: Serves new arrivals without re-running FCM.
+    Calculates geometric membership (mu) to saved centroids.
+    """
+    # fuzz.cluster.cdist calculates distances from points to centroids
+    # X_new_scaled shape: (n_samples, 3)
+    # centroids shape: (4, 3)
+    from scipy.spatial.distance import cdist
+    try:
+        d = cdist(X_new_scaled, centroids, metric='euclidean')
+
+        # Calculate membership u based on distances d
+        # Formula: u = 1 / (d^(2/(m-1)) * sum(1/d^(2/(m-1))))
+        m = 2.0
+        d_exponent = 2.0 / (m - 1)
+        
+        # Handle zero distances to avoid division by zero
+        d = np.fmax(d, np.finfo(np.float64).eps)
+        
+        inv_d = 1.0 / (d ** d_exponent)
+        u = inv_d / inv_d.sum(axis=1, keepdims=True)
+        
+        # μ (membership) is the max membership value for each sample
+        mu = np.max(u, axis=1)
+        predicted_cluster = np.argmax(u, axis=1)
+        
+        return mu, predicted_cluster
+    except Exception as e:
+        print(f"Membership prediction error: {e}")
+        return np.array([0.5]), np.array([0])
+
 

@@ -62,3 +62,27 @@ def predict_state(svm_model, new_data_scaled):
     if svm_model is None:
         return ["Normal"] * len(new_data_scaled)
     return svm_model.predict(new_data_scaled)
+
+
+def get_svm_signals(svm_model, X_scaled):
+    """
+    Live Cycle: Extracts Gap(SVM) and Confidence.
+    Gap = max(P) - second_max(P)
+    """
+    if svm_model is None:
+        return "Normal", 1.0, 0.0
+        
+    probs = svm_model.predict_proba(X_scaled)
+    # Get the top two probabilities for the first sample (assuming single inference in live loop)
+    # If batch, this could be extended.
+    sorted_probs = sorted(probs[0], reverse=True)
+    if len(sorted_probs) > 1:
+        gap = sorted_probs[0] - sorted_probs[1]
+    else:
+        gap = sorted_probs[0]
+        
+    confidence = sorted_probs[0]
+    prediction = svm_model.predict(X_scaled)[0]
+    
+    return str(prediction), float(confidence), float(gap)
+

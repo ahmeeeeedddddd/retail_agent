@@ -11,3 +11,7 @@ build/
 .idea/
 
 dataset/train.csv
+
+documentation/
+backend/models_full_list.txt
+publication/

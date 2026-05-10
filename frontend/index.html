@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetailMind Agent</title>
+    <meta name="description" content="RetailMind - Autonomous Egyptian Retail Intelligence Dashboard">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="sidebar">
-        <div class="logo-box">
-            RM
-        </div>
+        <div class="logo-box">RM</div>
         <div class="nav-icons">
             <div class="nav-item active" id="nav-dashboard" title="Dashboard">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -25,115 +24,187 @@
             <div class="nav-item" id="nav-trends" title="Trends">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
             </div>
-            <div class="nav-item" id="nav-settings" title="Settings">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            </div>
         </div>
     </div>
 
     <div class="main-content">
         <header class="topbar">
             <div class="brand">
-                <h1>RetailMind Agent</h1>
+                <h1>RetailMind Agent - Dashboard</h1>
                 <div class="status-badge">
                     <span class="dot"></span>
                     Agent Running
                 </div>
             </div>
             <div class="user-actions">
+                <div id="lastUpdated" style="font-size:11px; color: var(--text-sec);">Connecting...</div>
                 <div class="avatar">
-                    <img src="C:\Users\Administrator\Documents\pexels-zelch-20376387.jpg" alt="Avatar" title="Admin Profile">
+                    <img src="avatar.jpg" alt="Avatar" title="Admin Profile">
                 </div>
             </div>
         </header>
 
-        <div class="dashboard-grid">
-            <!-- Top KPI Cards -->
-            <div class="kpi-row">
+        <!-- Live Incoming Data Feed -->
+        <div class="incoming-data-section">
+            <details class="scraped-data-collapse">
+                <summary>📡 View Live Incoming Data (Web Scraping)</summary>
+                <div class="scraped-data-content">
+                    <ul id="scrapedDataList">
+                        <li>Loading live Egyptian market data...</li>
+                    </ul>
+                </div>
+            </details>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view">
+            <!-- KPI Row -->
+            <div class="kpi-row" style="display:grid; grid-template-columns: repeat(4,1fr); gap:20px; padding: 20px 30px 0 30px;">
                 <div class="card kpi-card">
-                    <div class="kpi-title">Total Products Monitored</div>
+                    <div class="kpi-title">Total Products</div>
                     <div class="kpi-value" id="kpiTotalProducts">--</div>
                     <div class="kpi-change positive" id="kpiTotalChange">--</div>
                 </div>
                 <div class="card kpi-card">
-                    <div class="kpi-title">Critical Alerts Today</div>
-                    <div class="kpi-value" id="kpiCriticalAlerts">--</div>
-                    <div class="kpi-change negative" id="kpiCriticalChange">--</div>
+                    <div class="kpi-title">Critical Alerts</div>
+                    <div class="kpi-value" id="kpiCriticalAlerts" style="color: var(--color-red);">--</div>
+                    <div class="kpi-change" id="kpiCriticalChange">--</div>
                 </div>
                 <div class="card kpi-card">
-                    <div class="kpi-title">Forecasting Accuracy %</div>
-                    <div class="kpi-value" id="kpiForecastAccuracy">--</div>
+                    <div class="kpi-title">Forecast Accuracy</div>
+                    <div class="kpi-value" id="kpiForecastAccuracy" style="color: var(--color-green);">--</div>
                     <div class="kpi-change positive" id="kpiAccuracyChange">--</div>
                 </div>
                 <div class="card kpi-card">
                     <div class="kpi-title">Emails Sent</div>
                     <div class="kpi-value" id="kpiEmailsSent">--</div>
-                    <div class="kpi-change positive" id="kpiEmailsChange">--</div>
+                    <div class="kpi-change" id="kpiEmailsChange">--</div>
                 </div>
             </div>
 
-            <!-- Middle Row: Charts -->
-            <div class="middle-row">
-                <div class="card chart-card">
-                    <h2 class="card-title">SHAP Feature Importance</h2>
-                    <div class="chart-container">
-                        <canvas id="shapChart"></canvas>
-                    </div>
-                </div>
-                <div class="card chart-card">
-                    <h2 class="card-title">SARIMA Sales Forecast (30 Days)</h2>
-                    <div class="chart-container">
-                        <canvas id="sarimaChart"></canvas>
-                    </div>
-                </div>
-            </div>
+            <!-- 6-Zone Grid -->
+            <div class="dashboard-grid advanced-grid">
 
-            <!-- Bottom Row: Scatter and Table -->
-            <div class="bottom-row">
-                <div class="card chart-card">
-                    <div class="card-header">
-                        <h2 class="card-title">DBSCAN + FCM Product Clusters</h2>
-                    </div>
-                    <div class="chart-container">
+                <!-- Zone 1: Cluster Health (FCM) -->
+                <div class="card zone-card" id="zone1">
+                    <h2 class="zone-title">Zone 1: Cluster Health (FCM)</h2>
+                    <div class="chart-container-zone">
                         <canvas id="clusterChart"></canvas>
                     </div>
                 </div>
-                <div class="card table-card">
-                    <h2 class="card-title">Live Action Log</h2>
-                    <div class="table-container">
+
+                <!-- Zone 2: Live Scoring Feed -->
+                <div class="card zone-card" id="zone2">
+                    <h2 class="zone-title">Zone 2: Live Scoring Feed</h2>
+                    <div class="scoring-feed" id="liveScoringFeed">
+                        <div class="score-signal">Severity (S): <span id="sigS">--</span></div>
+                        <div class="score-signal">Gap (SVM): <span id="sigGap">--</span></div>
+                        <div class="score-signal">Membership (μ): <span id="sigMu">--</span></div>
+                        <div class="score-signal">ARIMA Trend: <span id="sigArima">--</span></div>
+                        <div class="score-signal">SHAP Cosine: <span id="sigShap">--</span></div>
+                        <div class="score-signal">USD/EGP Rate: <span id="sigEgp" style="color: var(--accent-blue);">--</span></div>
+                        <div class="score-signal">Cairo Weather: <span id="sigWeather">--</span></div>
+                        <div class="total-score">Intelligent Score: <span id="sigTotal">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Zone 3: Action Dispatch (ReAct Loop) -->
+                <div class="card zone-card" id="zone3">
+                    <h2 class="zone-title">Zone 3: Action Dispatch (ReAct)</h2>
+                    <div class="react-step-container">
+                        <div class="step">OBSERVE <span class="arrow">→</span></div>
+                        <div class="step">REASON <span class="arrow">→</span></div>
+                        <div class="step active" id="reactPathDisplay">IDLE</div>
+                    </div>
+                    <div class="dispatch-action" id="reactActionDisplay">Waiting for input...</div>
+                    <div class="agent-thought-bubble" id="agentThoughts">"Analytical cycle initializing..."</div>
+                </div>
+
+                <!-- Zone 4: SHAP Reliability -->
+                <div class="card zone-card" id="zone4">
+                    <h2 class="zone-title">Zone 4: SHAP Reliability (Cosine)</h2>
+                    <div class="chart-container-zone">
+                        <canvas id="shapChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Zone 5: Outcome Tracking -->
+                <div class="card zone-card" id="zone5">
+                    <h2 class="zone-title">Zone 5: Outcome Tracking (Forecast)</h2>
+                    <div class="chart-container-zone">
+                        <canvas id="sarimaChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Zone 6: System Alerts (Drift) -->
+                <div class="card zone-card" id="zone6">
+                    <h2 class="zone-title">Zone 6: System Alerts (Drift)</h2>
+                    <div class="alert-feed" id="systemAlerts">
+                        <div class="alert-item" id="driftStatus">Status: Steady Agent</div>
+                        <div class="outcome-log" id="outcomeLog">Outcome: Observant</div>
+                    </div>
+                    <div class="mini-table-container">
                         <table>
                             <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>Product</th>
-                                    <th>Store</th>
-                                    <th>SVM State</th>
-                                    <th>Action</th>
-                                </tr>
+                                <tr><th>Product</th><th>Action</th><th>Score</th></tr>
                             </thead>
-                            <tbody id="actionLogTable">
-                                <!-- Dynamic rows -->
-                            </tbody>
+                            <tbody id="miniActionLog"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Full Width Report -->
-            <div class="card report-card">
-                <div class="report-header">
-                    <div class="report-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        <!-- Analytics View -->
+        <div id="analytics-view" class="module-view" style="display: none; padding: 30px;">
+            <h2 style="margin-bottom: 20px; color: var(--text-primary);">Deep Analytics Module</h2>
+            <div class="analytics-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="card" style="height: 360px;">
+                    <h3 style="margin-bottom:12px;">Category Performance (Egypt Context)</h3>
+                    <div style="position:relative; height:290px;">
+                        <canvas id="categoryChart"></canvas>
                     </div>
-                    <h2 class="card-title">AI Manager Report</h2>
                 </div>
-                <div class="report-content">
-                    <p><strong>Daily Summary:</strong> <span id="reportSummary">Loading...</span></p>
-                    <p><strong>Cluster Insights:</strong> <span id="reportInsights">Loading...</span></p>
-                    <p><strong>Recommended Actions:</strong> <span id="reportActions">Loading...</span></p>
+                <div class="card">
+                    <h3 style="margin-bottom:12px;">Market Pulse</h3>
+                    <div class="pulse-item" style="margin-bottom:10px;"><strong>EGP Rate:</strong> <span id="analyticEgp">--</span></div>
+                    <div class="pulse-item" style="margin-bottom:10px;"><strong>Cairo Weather:</strong> <span id="analyticWeather">--</span></div>
+                    <div class="pulse-item" style="margin-bottom:10px;"><strong>Inflation:</strong> <span id="analyticInflation">--</span>%</div>
+                    <div class="pulse-item"><strong>Interest Rate:</strong> <span id="analyticInterest">--</span>%</div>
                 </div>
             </div>
         </div>
+
+        <!-- Reports View -->
+        <div id="reports-view" class="module-view" style="display: none; padding: 30px;">
+            <h2 style="margin-bottom: 20px; color: var(--text-primary);">Executive AI Report</h2>
+            <div class="card" id="executiveReportCard" style="padding: 30px; border-left: 5px solid var(--accent-blue);">
+                <h3 style="margin-bottom: 15px;">Automated Intelligence Summary</h3>
+                <div id="reportGeminiContent" style="font-style: italic; color: var(--text-primary); line-height: 1.8; font-size: 1.1rem;">
+                    Loading report from Agent AI...
+                </div>
+                <hr style="margin: 20px 0; border: 0; border-top: 1px solid var(--card-border);">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div><strong>Confidence:</strong> <span id="reportConf">--</span></div>
+                    <div><strong>Detected Risk:</strong> <span id="reportRisk">--</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trends View -->
+        <div id="trends-view" class="module-view" style="display: none; padding: 30px;">
+            <h2 style="margin-bottom: 20px; color: var(--text-primary);">Global Demand & Market Trends</h2>
+            <div class="card" style="height: 400px;">
+                <h3 style="margin-bottom:12px;">Regional Sales Forecast vs EGP Trend</h3>
+                <div style="position:relative; height:330px;">
+                    <canvas id="marketTrendsChart"></canvas>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <p style="color: var(--text-sec);">Long-term seasonal SARIMA forecasting models adjusted for Egyptian market signals.</p>
+            </div>
+        </div>
+
     </div>
 
     <!-- Scripts -->
