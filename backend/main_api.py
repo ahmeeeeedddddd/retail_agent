@@ -112,6 +112,8 @@ async def run_full_pipeline():
             sample_size = min(30, len(X_train_scaled))
 
             X_experience = X_train_scaled[:sample_size]
+            # Store background for Live Cycle Zone 4 stability
+            global_state["reasoning_engine"].shap_background = X_experience
             shap_experience = run_shap_analysis(svm_model, X_experience, return_raw=True)
             
             # -- RAG INDEXING ---
@@ -139,15 +141,32 @@ async def run_full_pipeline():
             
             mu, pred_cluster = predict_membership(X_new_scaled, centroids_c)
             pred_state, confidence, gap = get_svm_signals(svm_model, X_new_scaled)
-            forecast_vals, drift_sarima = run_sarima_forecasting(df, days=30)
+            # Dynamic Forecast: Analyze current family from RAW df (ensures 'date' column is present)
+            forecast_df = df[df['family'] == chosen_family]
+            forecast_vals, drift_sarima = run_sarima_forecasting(forecast_df, days=30)
             trend = np.mean(np.diff(forecast_vals))
             
-            target_mean_shap = global_state["cluster_shap_means"].get(pred_state, np.array([0.1, 0.1, 0.1]))
-            current_shap = run_shap_analysis(svm_model, X_new_scaled)
+            target_mean_shap = global_state["cluster_shap_means"].get(pred_state, np.array([0.1, 0.2, 0.3]))
+            
+            # --- GRADIENT SEVERITY CALCULATION ---
+            base_s = 2.0 if pred_state=='Critical' else 1.0 if pred_state=='At-Risk' else 0.0
+            # If Normal, granular is 0.0 to 0.4. If At-Risk/Critical, granular is Base to Base+0.9
+            if pred_state == 'Normal':
+                granular_severity = (1.0 - confidence) * 0.4
+            else:
+                granular_severity = base_s + (confidence * 0.95)
+            granular_severity = round(float(granular_severity), 2)
+            
+            # Pass captured background for diagnostic stability (resolves Zone 4 identical bars)
+            current_shap = run_shap_analysis(
+                svm_model, 
+                X_new_scaled, 
+                background_data=global_state["reasoning_engine"].shap_background
+            )
             
             react_result = global_state["reasoning_engine"].react_loop(
                 X_new_scaled[0], current_shap, 
-                2 if pred_state=='Critical' else 1 if pred_state=='At-Risk' else 0,
+                granular_severity,
                 gap, mu[0], trend, target_mean_shap,
                 egypt_meta=global_state["egypt_telemetry"]
             )
@@ -158,6 +177,11 @@ async def run_full_pipeline():
             action_path = react_result.get('path', 'Monitor')
             best_action = react_result.get('action', 'No Action')
             
+            # Map dominant feature for transparency
+            dom_idx = react_result.get('dominant_feature_idx', 0)
+            dom_feature = features[dom_idx] if dom_idx < len(features) else "None"
+            react_result['dominant_feature'] = dom_feature
+
             import datetime
             live_time = datetime.datetime.now().strftime('%I:%M:%S %p')
             global_state["actionLog"].append({
@@ -165,6 +189,12 @@ async def run_full_pipeline():
                 "product": str(target_sample['family'].values[0]),
                 "path": action_path,
                 "action": best_action,
+                "dominant_feature": dom_feature,
+                "shap_values": [round(float(x), 4) for x in current_shap] if isinstance(current_shap, np.ndarray) else [0,0,0],
+                "shap_feature_names": features,
+                "weights": react_result.get('weights', {}),
+                "rag_consensus": react_result.get('rag_consensus', 0),
+                "rag_similarity": react_result.get('rag_similarity', 0),
                 "score": react_result.get('score', 0.5),
                 "telemetry": react_result,
                 "thoughts": global_state["agent_thoughts"]
@@ -215,21 +245,29 @@ async def run_full_pipeline():
             for _, row in clustered_df.sample(min(100, len(clustered_df))).iterrows():
                 global_state["clusters"].append({"x": float(row['mean_sales']), "y": float(row['std_sales']), "status": str(row['cluster_state'])})
 
-            # --- REPORTING ---
-            clusters_summary = f"{len([c for c in clustered_df['cluster_state'].unique() if c != 'Stable'])} dynamic clusters detected."
-            report = generate_manager_report(
-                total_products=len(df),
-                critical_alerts=global_state["metrics"]["criticalAlerts"],
-                forecast_acc=global_state["metrics"]["forecastAccuracy"],
-                clusters_summary=clusters_summary
-            )
-            global_state["reports_cache"] = report
+            # 4. Integrate Gemini Summary (Quota Optimization: Every 3 cycles or on Critical)
+            cycle_count = global_state.get("_cycle_count", 0) + 1
+            global_state["_cycle_count"] = cycle_count
             
-            # --- EMAIL REPORTING ---
-            from step5_action import send_executive_summary_email
-            email_ok = send_executive_summary_email(report, global_state["metrics"])
-            if email_ok:
-                global_state["_emails_total"] = global_state.get("_emails_total", 0) + 1
+            should_report = (cycle_count % 3 == 0) or ("High-Priority" in best_action) or ("Audit" in best_action)
+            
+            if should_report:
+                clusters_summary = f"{len([c for c in clustered_df['cluster_state'].unique() if c != 'Stable'])} dynamic clusters detected."
+                report = generate_manager_report(
+                    total_products=len(df),
+                    critical_alerts=global_state["metrics"]["criticalAlerts"],
+                    forecast_acc=global_state["metrics"]["forecastAccuracy"],
+                    clusters_summary=clusters_summary
+                )
+                global_state["reports_cache"] = report
+                
+                # --- EMAIL REPORTING ---
+                from step5_action import send_executive_summary_email
+                email_ok = send_executive_summary_email(report, global_state["metrics"])
+                if email_ok:
+                    global_state["_emails_total"] = global_state.get("_emails_total", 0) + 1
+            else:
+                logging.info(f"Reporting skipped for cycle {cycle_count} to conserve quota.")
 
             global_state["is_ready"] = True
             logging.info("Training Cycle Complete. Reporting live data...")

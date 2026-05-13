@@ -227,6 +227,7 @@
                             <th style="padding: 12px; min-width:140px;">Product Family</th>
                             <th style="padding: 12px;">ReAct Routing Path</th>
                             <th style="padding: 12px; min-width:150px;">Final Action</th>
+                            <th style="padding: 12px; color: var(--color-orange);">Top Driver (SHAP)</th>
                             <th style="padding: 12px;">Intelligent Score</th>
                             <th style="padding: 12px; min-width: 150px;">Internal Signals<br>(S | Gap | μ | Trend | Cosine)</th>
                             <th style="padding: 12px; min-width: 200px;">LLM Reasoning / Thoughts</th>
@@ -243,6 +244,44 @@
 
     </div>
 
+    <!-- ReAct Trace Modal -->
+    <div id="traceModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <h2 id="modalProductTitle" style="color: var(--accent-blue);">Product Family</h2>
+        <p id="modalActionSubtitle" style="font-weight: bold; margin-bottom: 20px;"></p>
+        
+        <div class="modal-grid">
+            <div class="modal-section">
+                <h3>INTERNAL REASONING TRACE</h3>
+                <ul id="modalTraceList" class="trace-list"></ul>
+                
+                <h3 style="margin-top:20px;">COMPOSITE DECISION WEIGHTS</h3>
+                <div id="modalWeightsBreakdown" class="weights-grid"></div>
+            </div>
+            <div class="modal-section">
+                <h3>DETAILED SHAP DRIVERS</h3>
+                <div id="modalShapDetails"></div>
+                
+                <div id="modalRagSection" class="technical-note" style="margin-top:20px; display:none; border-color: var(--color-green);">
+                    <h4 style="color: var(--color-green);">Historical RAG Evidence</h4>
+                    <p id="modalRagMetrics"></p>
+                </div>
+                
+                <div class="technical-note" style="margin-top:30px;">
+                    <h4>Technical Context</h4>
+                    <p>The AI model identifies anomalies by monitoring three core behavioral 'senses': 
+                       <strong>Historical Stability</strong> (mean), <strong>Volatility</strong> (std), and <strong>Event Elasticity</strong> (promo). 
+                       SHAP drivers show which 'sense' detected the current deviation.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="modalThoughtBox" class="thought-bubble" style="margin-top: 20px;">
+            <p id="modalThought" style="font-style: italic;"></p>
+        </div>
+    </div>
+</div>
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>

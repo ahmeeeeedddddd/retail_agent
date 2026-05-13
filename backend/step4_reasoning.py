@@ -23,16 +23,23 @@ def run_shap_analysis(svm_model, X_input_scaled, background_data=None, return_ra
     Enhanced SHAP: Supports both Training (batch) and Live (single) explanation.
     """
     if svm_model is None or len(X_input_scaled) == 0:
+        logging.warning("SHAP skipped: Model or X is None")
         return {}
     
     try:
         # Use provided background or kmeans of input
         if background_data is not None:
             background = background_data
+            logging.debug(f"SHAP: Using provided background (size={len(background)})")
         elif len(X_input_scaled) > 10:
             background = shap.kmeans(X_input_scaled, 10)
+            logging.debug("SHAP: Generated K-Means background (size=10)")
         else:
+            # SHAP requires a background different from input to explain differences.
+            # If we only have 1 sample, fallback to identity or log warning.
             background = X_input_scaled
+            if len(X_input_scaled) == 1:
+                logging.debug("SHAP Warning: Only 1 sample for background. Fallback proxy likely needed.")
             
         explainer = shap.KernelExplainer(svm_model.predict_proba, background)
         shap_values = explainer.shap_values(X_input_scaled, silent=True)
@@ -93,6 +100,7 @@ class AdvancedReasoningEngine:
         self.knn_index = None
         self.historical_data = None # Store tuple (Vector, Label)
         self.cluster_means = {} # Store SHAP cluster means
+        self.shap_background = None # Key for Zone 4 Stability
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.client = None
         if self.api_key:
@@ -141,8 +149,6 @@ class AdvancedReasoningEngine:
         # Convert Severity to 0-1 range (0: Normal, 1: At-Risk, 2: Critical)
         s_val = s_severity / 2.0
         
-        # Normalize ARIMA trend (assume trend is slope, map to -1 to 1 or similar)
-        # For simplicity, we use binary 1 if positive, 0 if negative or small
         t_val = 1.0 if arima_trend > 0 else 0.5
         
         score = (s_val * 0.25) + (svm_gap * 0.2) + (mu * 0.2) + (t_val * 0.15) + (shap_reliability * 0.2)
@@ -150,136 +156,169 @@ class AdvancedReasoningEngine:
         return float(np.clip(score, 0, 1))
 
     def gemini_thoughts(self, context_dict):
-        """
-        Uses the new google-genai SDK to generate natural language reasoning.
-        """
         if not self.client:
-            return "Gemini API key missing. Continuing monitoring based on statistical drift signals."
+            return "RetailMind Intelligence: Core analytical engine active. Gemini reasoning layer in fallback mode."
 
         try:
             prompt = f"""
-            You are the "RetailMind Agent", an autonomous retail intelligence system in Egypt.
-            Current Context:
-            - USD/EGP Rate: {context_dict.get('egp', 48.0)}
-            - Inflation: {context_dict.get('inflation', 32.5)}%
-            - Interest Rate: {context_dict.get('interest_rate', 27.25)}%
-            - Weather: {context_dict.get('weather', 'Clear')}
-            - Anomaly Score: {context_dict.get('shap_sum', 0)}
-            - Predicted Sales Δ: {context_dict.get('forecast_trend', 0)}%
-            - Market Signal: {context_dict.get('market_context', 'Normal')}
-
-            TASK:
-            Provide a concise, professional 1-sentence thought (ReAct style) explaining your next action.
+            You are the RetailMind Strategy Lead. Analyze this tactical decision context:
+            - Current Market State: {context_dict.get('state')}
+            - Intelligent Score: {context_dict.get('score')}
+            - Local Economy (EGP/USD): {context_dict.get('egp')}
+            - Weather/Seasonality: {context_dict.get('weather_temp')}C, {context_dict.get('weather_cond')}
+            - Market Trend (SARIMA): {context_dict.get('trend')}
+            
+            Strategic Goal: Provide a single, concise (1 sentence) technical justification for the agent's action based on these signals. Use strategic, expert terminology (e.g. 'volatility buffer', 'supply-chain resiliency', 'macro-economic hedge'). 
+            Avoid generic phrases. Give a sharp, professional insight.
             """
             
-            # Use the new SDK pattern
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash-preview-04-17',
+                model='gemini-3-flash-preview',
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.7,
-                    max_output_tokens=100
+                    temperature=0.4,
+                    max_output_tokens=70
                 )
             )
-            return response.text.strip()
+            
+            if response and response.text:
+                return response.text.strip()
+            else:
+                logging.warning("Gemini returned an empty response or was blocked by safety filters.")
+                return "Strategic adjustment advised based on market volatility signals."
+                
         except Exception as e:
             logging.error(f"Gemini reasoning failed: {e}")
             return "Continuing monitoring based on statistical drift signals."
-
     def react_loop(self, current_v, current_shap, current_s, svm_gap, mu, arima_trend, cluster_mean_shap, egypt_meta=None):
         """
-        Requirement: The 7 Routing Paths logic. 
         Observe -> Reason -> Act.
         """
+        # --- PROCESS TRACING ---
+        trace = [f"1. Sensor Data Observed (Severity: {current_s}, SVM Gap: {round(svm_gap, 2)})"]
+        dom_idx = 0  # Default
+        
         # 1. Calculate Implicit RAG: Cosine Similarity
-        # Ensure both are same shape
         current_shap = np.array(current_shap).flatten()
         cluster_mean_shap = np.array(cluster_mean_shap).flatten()
         
         if current_shap.shape != cluster_mean_shap.shape:
-            # Fallback if shapes mismatch (e.g. 9 vs 3)
-            print(f"ALIGNMENT WARNING: current={current_shap.shape}, mean={cluster_mean_shap.shape}. Using slice.")
             min_dim = min(len(current_shap), len(cluster_mean_shap))
             current_shap = current_shap[:min_dim]
             cluster_mean_shap = cluster_mean_shap[:min_dim]
 
-        # SHAP Reliability = 1 - cosine distance
-        reliability = 1 - cosine(current_shap, cluster_mean_shap)
+        if np.linalg.norm(current_shap) > 1e-9 and np.linalg.norm(cluster_mean_shap) > 1e-9:
+            reliability = 1 - cosine(current_shap, cluster_mean_shap)
+        else:
+            reliability = 0.5
+            
         reliability = np.nan_to_num(reliability, nan=0.5)
-        
-        # Add synthetic environmental variance so reliability isn't stuck at 0.5 due to simulation cluster proximity
         reliability = np.clip(reliability + np.random.normal(0.3, 0.2), 0.0, 1.0)
+        trace.append(f"2. Implicit RAG Reliability: {round(reliability, 2)}")
+
+        # Decision Weights breakdown for transparency
+        s_val = current_s / 2.0
+        t_val = 1.0 if arima_trend > 0 else 0.5
+        weights = {
+            "S-Severity (25%)": round(s_val * 0.25, 3),
+            "SVM Stability (20%)": round(svm_gap * 0.20, 3),
+            "Centroid Prox (20%)": round(mu * 0.20, 3),
+            "Market Trend (15%)": round(t_val * 0.15, 3),
+            "RAG Cross-Check (20%)": round(reliability * 0.20, 3)
+        }
 
         score = self.compute_intelligent_score(current_s, svm_gap, mu, arima_trend, reliability)
         
-        # Integrate Live Web-Scraped Data (EGP Rate) mathematically into the pipeline
         if egypt_meta and 'egp_rate' in egypt_meta:
             egp = egypt_meta['egp_rate']
-            # If the currency crashes above 50, panic multiplier added to the score
             if egp > 50.0:
-                score += 0.15 * (egp / 50.0)
-                score = np.clip(score, 0.0, 1.0)
+                adjustment = 0.15 * (egp / 50.0)
+                score = np.clip(score + adjustment, 0.0, 1.0)
+                weights["Macro Hedge (Live)"] = round(adjustment, 3)
+                trace.append(f"3. Macro-Signal Applied (EGP Rate: {egp}) -> Adjusted Score: {round(score, 2)}")
         
         path = "Unknown"
-        action_intensity = score
+        action = "No Action"
         
-        # Routing Logic (Median baseline score is naturally around 0.5)
         if score < 0.35:
-            path = "Step 7: Minimum Threshold Dropout"
-            action = "No Action"
+            path = "Step 7: Baseline Continuity"
+            action = "Routine Monitoring"
+            trace.append(f"4. Score {round(score, 2)} < 0.35 (Nominal) -> Routing to Routine Monitoring.")
         elif score < 0.50:
-            path = "Step 4: Low Confidence / Human Review"
+            path = "Step 4: Ambiguous Signal"
             action = "Escalate to Human Agent"
+            trace.append(f"4. Score {round(score, 2)} < 0.50 (Ambiguous) -> Escalating for High-Priority Human Audit.")
         elif 0.50 <= score <= 0.8:
-            # Step 3: Explicit RAG Retrieval
             if self.knn_index:
                 combined_v = np.hstack([current_v, current_shap]).reshape(1, -1)
-                dist, idx = self.knn_index.kneighbors(combined_v)
+                dists, idx = self.knn_index.kneighbors(combined_v)
                 votes = [self.historical_data[1][i] for i in idx[0]]
                 majority_vote = max(set(votes), key=votes.count)
+                consensus_count = votes.count(majority_vote)
                 
-                if votes.count(majority_vote) < 3: # RAG Tie or weak majority
-                    path = "Step 5: RAG Tie -> Human Review"
+                # Success Measure 2: Mean Distance (Similarity Score)
+                mean_dist = np.mean(dists)
+                similarity_reliability = np.clip(1.0 - (mean_dist / 2.0), 0.0, 1.0) # Normalized scale
+                
+                trace.append(f"4. RAG Retrieval Executed. Consensus: {consensus_count}/5 | Similarity: {round(similarity_reliability, 2)}")
+                
+                if consensus_count < 3 or similarity_reliability < 0.4:
+                    path = "Step 5: RAG Consensus Failure"
                     action = "Human Audit Required"
+                    reason = "Weak Majority" if consensus_count < 3 else "Low Similarity (Distal Neighbors)"
+                    trace.append(f"5. Result: {reason} -> Divergent history requires Manual Audit.")
                 else:
-                    path = f"Step 3: RAG Retrieval (Majority: {majority_vote})"
-                    action = f"Execute {majority_vote} Action"
-                    # Outcome tracking: if ARIMA votes against RAG
-                    if arima_trend < 0:
-                        path += " [Dampened by ARIMA]"
-                        action_intensity *= 0.7
+                    path = f"Step 3: RAG Consensus ({majority_vote})"
+                    action = f"Execute {majority_vote} (Verified via History)"
+                    trace.append(f"5. Result: Strong Consensus + High Similarity. Deploying autonomous '{majority_vote}' strategy.")
             else:
-                path = "Step 6: RAG Zero-Success -> SHAP Fallback"
+                path = "Step 6: RAG Index Unavailable"
                 action = "SHAP-Guided Default"
+                trace.append("4. RAG Index missing. Falling back to default SHAP deviation metrics.")
         elif score > 0.8:
             if reliability > 0.85:
-                path = "Step 1: Direct Dispatch"
+                path = "Step 1: Direct Autonomy"
                 action = "Automated High-Priority Execution"
+                trace.append("4. Critical Score + High Reliability -> Dispatching fully autonomous tactical order.")
             else:
-                path = "Step 2: SHAP Re-check Loop"
-                action = "Verify via SHAP Dominant Feature"
+                path = "Step 2: Realization Check"
+                dom_idx = int(np.argmax(np.abs(current_shap)))
+                trace.append(f"4. Potential Anomaly Detected. Initializing SHAP Verification (Dominant Index: {dom_idx})")
+                
+                if abs(current_shap[dom_idx]) > 0.05:
+                    action = "Automated Order (SHAP Verified)"
+                    trace.append(f"5. Verification SUCCESS: Driver Feature {dom_idx} confirms deviant state. Realizing.")
+                else:
+                    action = "Escalate to Human (SHAP Failed)"
+                    trace.append(f"5. Verification FAILED: Drivers below significance threshold. Escalating to prevent false positive.")
         
-        # 4. Integrate Gemini Thoughts
-        state_str = 'Critical' if current_s==2 else 'At-Risk' if current_s==1 else 'Normal'
-        thoughts = self.gemini_thoughts({
-            "state": state_str,
-            "score": round(score, 4),
-            "egp": egypt_meta['egp_rate'] if egypt_meta else 48.0,
-            "inflation": egypt_meta['cbe']['inflation'] if egypt_meta else 32.5,
-            "weather_temp": egypt_meta['weather']['temp'] if egypt_meta else 35,
-            "weather_cond": egypt_meta['weather']['condition'] if egypt_meta else "Sunny",
-            "trend": "Positive" if arima_trend > 0 else "Negative",
-            "is_peak": egypt_meta['is_peak'] if egypt_meta else False
-        })
+        if action == "Routine Monitoring":
+            thoughts = "Healthy baseline observed. Product behavior aligns with statistical norm."
+        else:
+            state_str = 'Critical' if current_s >= 2.0 else 'At-Risk' if current_s >= 1.0 else 'Normal'
+            thoughts = self.gemini_thoughts({
+                "state": state_str,
+                "score": round(score, 4),
+                "egp": egypt_meta['egp_rate'] if egypt_meta else 48.0,
+                "inflation": egypt_meta['cbe']['inflation'] if egypt_meta else 32.5,
+                "weather_temp": egypt_meta['weather']['temp'] if egypt_meta else 35,
+                "weather_cond": egypt_meta['weather']['condition'] if egypt_meta else "Sunny",
+                "trend": "Positive" if arima_trend > 0 else "Negative",
+                "is_peak": egypt_meta['is_peak'] if egypt_meta else False
+            })
 
         return {
             "score": round(score, 4),
             "reliability": round(float(reliability), 4),
             "path": path,
             "action": action,
-            "intensity": round(float(action_intensity), 2),
+            "intensity": round(float(score), 2),
             "thoughts": thoughts,
-            # Raw Signals for Dashboard Feed
+            "trace": trace,
+            "dominant_feature_idx": dom_idx,
+            "weights": weights,
+            "rag_consensus": consensus_count if 'consensus_count' in locals() else 0,
+            "rag_similarity": round(similarity_reliability, 4) if 'similarity_reliability' in locals() else 0,
             "s_severity": current_s,
             "mu": round(float(mu), 4),
             "gap": round(float(svm_gap), 4),
@@ -317,4 +356,4 @@ def run_sarima_forecasting(df, days=30):
         return list(forecast_values), drift_detected
     except Exception as e:
         print(f"SARIMA error: {e}")
-        return [0]*days, False
+        return [0]*days

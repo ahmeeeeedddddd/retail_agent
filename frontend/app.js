@@ -157,44 +157,151 @@ function updateZone6(data) {
     // Update Full Audit Table
     if (fullLogBody) {
         if (logs.length === 0) {
-            fullLogBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-sec);">Waiting for inner loops to run...</td></tr>';
+            fullLogBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-sec);">Waiting for inner loops to run...</td></tr>';
         } else {
-            // Only rebuild if the number of logs changed to avoid visual flickering on every 5s poll
             if (fullLogBody.children.length === 1 && fullLogBody.innerHTML.includes('Waiting')) {
                  fullLogBody.innerHTML = '';
             }
             
-            // Re-render completely for simplicity, reverse chronological
             fullLogBody.innerHTML = '';
-            logs.slice().reverse().forEach(entry => {
+            logs.slice().reverse().forEach((entry, idx) => {
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid rgba(142, 149, 163, 0.1)';
                 
                 let signalsStr = 'S:-- | Gap:-- | μ:-- | Trend:-- | Cos:--';
-                let thoughtsStr = entry.thoughts || "Statistical routing executed.";
+                let thoughtsStr = entry.thoughts || "Strategic routing executed.";
                 
                 if (entry.telemetry) {
-                     signalsStr = `S:${entry.telemetry.s_severity || 0} | Gap:${entry.telemetry.gap || 0} | μ:${entry.telemetry.mu || 0} | T:${entry.telemetry.arima_trend || 0} | Cos:${entry.telemetry.reliability || 0}`;
+                     signalsStr = `S:${entry.telemetry.s_severity || 0} | G:${entry.telemetry.gap || 0} | μ:${entry.telemetry.mu || 0} | T:${entry.telemetry.arima_trend || 0} | C:${entry.telemetry.reliability || 0}`;
                 }
                 
-                // Highlight action colors
                 let actionColor = 'var(--text-primary)';
                 if (entry.action.includes('Restock') || entry.action.includes('High-Priority')) actionColor = 'var(--color-green)';
-                else if (entry.action.includes('Human') || entry.action.includes('Escalate')) actionColor = 'var(--color-red)';
+                else if (entry.action.includes('Human') || entry.action.includes('Escalate') || entry.action.includes('Audit')) actionColor = 'var(--color-red)';
+                else if (entry.action.includes('Monitoring')) actionColor = 'var(--text-sec)';
 
                 tr.innerHTML = `
                     <td style="padding: 12px; color: var(--text-sec);">${entry.timestamp || '--'}</td>
-                    <td style="padding: 12px; font-weight: 500;">${entry.product || '--'}</td>
+                    <td style="padding: 12px; font-weight: 500;">
+                        <span class="clickable-product" onclick="showTraceModal(${logs.length - 1 - idx})">${entry.product || '--'}</span>
+                    </td>
                     <td style="padding: 12px; color: var(--accent-blue);">${entry.path || '--'}</td>
                     <td style="padding: 12px; font-weight: bold; color: ${actionColor};">${entry.action || '--'}</td>
-                    <td style="padding: 12px;"><strong>${entry.score !== undefined ? entry.score : (tel.intensity || '--')}</strong></td>
-                    <td style="padding: 12px; color: var(--text-sec); font-family: monospace; font-size: 0.9em;">${signalsStr}</td>
+                    <td style="padding: 12px; color: var(--color-orange); font-weight: 600;">${entry.dominant_feature || 'None'}</td>
+                    <td style="padding: 12px;"><strong>${entry.score !== undefined ? entry.score : '--'}</strong></td>
+                    <td style="padding: 12px; color: var(--text-sec); font-family: monospace; font-size: 0.85em;">${signalsStr}</td>
                     <td style="padding: 12px; font-style: italic; color: #a3a8b3;">${thoughtsStr}</td>
                 `;
                 fullLogBody.appendChild(tr);
             });
         }
     }
+}
+
+// ─── Modal Logic ──────────────────────────────────────────────────────────────
+function showTraceModal(logIdx) {
+    if (!lastData || !lastData.actionLog || !lastData.actionLog[logIdx]) return;
+    const entry = lastData.actionLog[logIdx];
+    const modal = document.getElementById('traceModal');
+    
+    document.getElementById('modalProductTitle').textContent = entry.product || 'Unknown Product';
+    document.getElementById('modalActionSubtitle').textContent = `Cycle Action: ${entry.action}`;
+    
+    // 1. Trace List
+    const traceList = document.getElementById('modalTraceList');
+    traceList.innerHTML = '';
+    if (entry.telemetry && entry.telemetry.trace) {
+        entry.telemetry.trace.forEach(step => {
+            const li = document.createElement('li');
+            li.textContent = step;
+            traceList.appendChild(li);
+        });
+    }
+
+    // 2. Decision Weights with Interpretation
+    const weightsDiv = document.getElementById('modalWeightsBreakdown');
+    weightsDiv.innerHTML = '';
+    if (entry.weights) {
+        Object.entries(entry.weights).forEach(([label, val]) => {
+            let impact = "Inert";
+            let color = "var(--text-sec)";
+            if (val >= 0.20) { impact = "Crucial"; color = "var(--color-red)"; }
+            else if (val >= 0.15) { impact = "Major"; color = "var(--color-orange)"; }
+            else if (val >= 0.10) { impact = "Mild"; color = "var(--accent-blue)"; }
+            else if (val > 0) { impact = "Minor"; color = "var(--color-green)"; }
+
+            const width = Math.min(val * 400, 100); 
+            const row = document.createElement('div');
+            row.className = 'weight-row';
+            row.innerHTML = `
+                <div class="weight-label">${label} <span style="font-size:10px; color:${color}; font-weight:bold; margin-left:5px;">[${impact}]</span></div>
+                <div class="weight-bar-bg"><div class="weight-bar-fill" style="width: ${width}%; background:${color};"></div></div>
+                <div class="weight-val">+${val.toFixed(2)}</div>
+            `;
+            weightsDiv.appendChild(row);
+        });
+    }
+
+    // 3. SHAP Details
+    const shapDiv = document.getElementById('modalShapDetails');
+    shapDiv.innerHTML = '';
+    const labels = entry.shap_feature_names || ['mean_sales', 'std_sales', 'promo_impact'];
+    const vals = entry.shap_values || [0,0,0];
+    labels.forEach((label, i) => {
+        const val = vals[i] || 0;
+        const width = Math.min(Math.abs(val) * 200, 100);
+        const row = document.createElement('div');
+        row.className = 'shap-bar-row';
+        row.innerHTML = `
+            <div class="shap-label">${label}</div>
+            <div class="shap-bar-bg"><div class="shap-bar-fill" style="width: ${width}%;"></div></div>
+            <div class="shap-val">${val.toFixed(4)}</div>
+        `;
+        shapDiv.appendChild(row);
+    });
+
+    // 4. Conditional RAG EvidenceSection
+    const ragSection = document.getElementById('modalRagSection');
+    const ragMetrics = document.getElementById('modalRagMetrics');
+    if (entry.rag_consensus > 0) {
+        ragSection.style.display = 'block';
+        ragMetrics.innerHTML = `<strong>Consensus:</strong> ${entry.rag_consensus}/5 Neighbors Agreement<br><strong>Similarity Score:</strong> ${entry.rag_similarity}`;
+    } else {
+        ragSection.style.display = 'none';
+    }
+
+    document.getElementById('modalThought').textContent = `"${entry.thoughts || 'No strategic summary available.'}"`;
+    modal.style.display = "block";
+    
+    const span = document.getElementsByClassName("close-modal")[0];
+    span.onclick = () => modal.style.display = "none";
+}
+
+// Update the full log table
+function updateFullAuditTable(log) {
+    const tableBody = document.getElementById('fullAuditLogTable');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    
+    log.slice().reverse().forEach((entry, idx) => {
+        const actualIdx = log.length - 1 - idx;
+        const tr = document.createElement('tr');
+        
+        const signals = entry.telemetry ? 
+            `${entry.telemetry.s_severity} | ${entry.telemetry.gap} | ${entry.telemetry.mu} | ${entry.telemetry.arima_trend} | ${entry.telemetry.reliability}` : '--';
+        
+        tr.innerHTML = `
+            <td>${entry.timestamp}</td>
+            <td class="clickable-product" onclick="showTraceModal(${actualIdx})">${entry.product}</td>
+            <td>${entry.path}</td>
+            <td><strong>${entry.action}</strong></td>
+            <td style="color:var(--color-orange);">${entry.dominant_feature}</td>
+            <td>${entry.score}</td>
+            <td style="font-size:10px; color:var(--text-sec);">${signals}</td>
+            <td style="font-style:italic;">${entry.thoughts}</td>
+        `;
+        tableBody.appendChild(tr);
+    });
 }
 
 // ─── Incoming Data / Scrape Feed ──────────────────────────────────────────────
@@ -320,14 +427,14 @@ function renderDispatchChart(data) {
     if (charts.dispatch) charts.dispatch.destroy();
 
     const logs = data.actionLog || [];
-    let counts = { 'Direct Exec': 0, 'Verify/RAG': 0, 'Human/Wait': 0, 'Dropout': 0 };
+    let counts = { 'Direct Exec': 0, 'Verify/RAG': 0, 'Human/Wait': 0, 'Routine Monitoring': 0 };
 
     logs.forEach(log => {
         if (!log.path) return;
         if (log.path.includes('Step 1')) counts['Direct Exec']++;
         else if (log.path.includes('Step 2') || log.path.includes('Step 3')) counts['Verify/RAG']++;
         else if (log.path.includes('Step 4') || log.path.includes('Step 5') || log.path.includes('Tie')) counts['Human/Wait']++;
-        else counts['Dropout']++;
+        else counts['Routine Monitoring']++;
     });
 
     charts.dispatch = new Chart(ctx, {

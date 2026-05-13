@@ -1,4 +1,5 @@
 import os
+import logging
 from google import genai
 from google.genai import types
 
@@ -19,15 +20,17 @@ def generate_manager_report(total_products, critical_alerts, forecast_acc, clust
         client = genai.Client(api_key=API_KEY)
         
         prompt = f"""
-        You are an AI Manager for an e-commerce retail store in Egypt. Give a clean, concise report.
-        Data: {total_products} total products, {critical_alerts} critical alerts, Forecast Accuracy: {forecast_acc}%.
-        Clusters: {clusters_summary}.
+        You are an AI Manager for an e-commerce retail store in Egypt. Give a clean, concise tactical report.
+        Focus: Explain the recent outcomes, specific actions taken by the autonomous agent, and the underlying SHAP drivers (mathematical explanations) for market anomalies.
+        
+        Overall Data: {total_products} total products, {critical_alerts} critical alerts.
+        Cluster Metrics: {clusters_summary}.
         
         Format your response as JSON with exactly these keys: 'summary', 'insights', 'actions'.
         """
         
         response = client.models.generate_content(
-            model='gemini-2.5-flash-preview-04-17',
+            model='gemini-3-flash-preview',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.7,
@@ -36,12 +39,19 @@ def generate_manager_report(total_products, critical_alerts, forecast_acc, clust
         )
         
         import json
-        report_data = json.loads(response.text)
-        return {
-            "summary": report_data.get("summary", "N/A"),
-            "insights": report_data.get("insights", "N/A"),
-            "actions": report_data.get("actions", "N/A")
-        }
+        if response and response.text:
+            try:
+                report_data = json.loads(response.text)
+                return {
+                    "summary": report_data.get("summary", "N/A"),
+                    "insights": report_data.get("insights", "N/A"),
+                    "actions": report_data.get("actions", "N/A")
+                }
+            except json.JSONDecodeError:
+                logging.error("Failed to decode Gemini JSON response.")
+        
+        raise ValueError("Empty or invalid response from Gemini")
+
     except Exception as e:
         # Graceful fallback for Quota/API errors
         status_msg = "Market Analysis: Stability Observed" if critical_alerts == 0 else f"Market Alert: {critical_alerts} Zones require attention"
@@ -57,63 +67,75 @@ from email.mime.multipart import MIMEMultipart
 
 def send_action_email(product_id, store_id, units, action, context=None):
     """
-    Sends an action alert via SMTP.
+    Revised: Handles URGENT priority for Human Audit actions and includes the trace.
     """
-    # Prefer Production Gmail if provided, fallback to Mailtrap Sandbox
-    smtp_host = os.getenv("GMAIL_SMTP_HOST") or os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("GMAIL_SMTP_PORT") or os.getenv("SMTP_PORT") or 587)
-    smtp_user = os.getenv("GMAIL_SMTP_USER") or os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("GMAIL_SMTP_PASS") or os.getenv("SMTP_PASS")
-    
-    from_email = os.getenv("ALERT_FROM_EMAIL", "alerts@retailmind.com")
-    to_email = os.getenv("ALERT_TO_EMAIL", "manager@retailmind.com")
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
 
-    if not all([smtp_host, smtp_user, smtp_pass]):
-        print(f"SMTP Config Missing. SIMULATED EMAIL: Restock {units} units of {product_id} at Store {store_id}")
+    # Configuration
+    SMTP_SERVER = "smtp.gmail.com"
+    SMTP_PORT = 587
+    SENDER_EMAIL = os.getenv("SMTP_USER", "aahmedaboalfath2005@gmail.com")
+    PASSWORD = os.getenv("SMTP_PASS")
+    RECEIVER_EMAIL = "ahmedaboalfath15@gmail.com"
+
+    if not PASSWORD:
+        logging.warning("SMTP Password not found in .env. Skipping email dispatch.")
         return False
 
-    # Create message
-    message = MIMEMultipart("alternative")
-    message["Subject"] = f"AGENTIC ACTION: {action} on {product_id}"
-    message["From"] = from_email
-    message["To"] = to_email
+    is_urgent = "Human" in action or "Escalate" in action or "Audit" in action
+    priority_label = "URGENT: " if is_urgent else ""
+    
+    msg = MIMEMultipart()
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = RECEIVER_EMAIL
+    msg['Subject'] = f"{priority_label}RetailMind Action: {action} on {product_id}"
+    
+    if is_urgent:
+        msg.add_header('X-Priority', '1 (Highest)')
+        msg.add_header('Importance', 'High')
 
-    context_html = ""
-    if context:
-        context_html = f"""
-        <div style="background-color: #f8f9fa; border-left: 4px solid #3b82f6; padding: 15px; margin-top: 20px;">
-            <h3 style="margin-top: 0; color: #3b82f6;">RetailMind AI Reasoning Log</h3>
-            <p><strong>Routing Path:</strong> {context.get('path', 'N/A')}</p>
-            <p><strong>Intelligent Score:</strong> {context.get('score', 'N/A')} | <strong>Reliability:</strong> {context.get('reliability', 'N/A')}</p>
-            <hr style="border: none; border-top: 1px solid #ddd;"/>
-            <p><strong>Agent Thought:</strong> <em>"{context.get('thoughts', 'N/A')}"</em></p>
+    thoughts = context.get('thoughts', 'Routine monitoring cycle.') if context else "..."
+    trace_html = ""
+    if context and 'trace' in context:
+        trace_steps = "<br>".join([f"&bull; {step}" for step in context['trace']])
+        trace_html = f"""
+        <div style="background-color: #f0f7ff; padding: 12px; border-radius: 5px; margin-top: 10px; border-left: 4px solid #3b82f6;">
+            <strong>Internal Process Trace:</strong><br>
+            <span style="font-family: monospace; font-size: 13px; color: #444;">{trace_steps}</span>
         </div>
         """
 
-    html_content = f"""
+    html_body = f"""
     <html>
-    <body style="font-family: sans-serif; color: #333; line-height: 1.6;">
-        <h2 style="color: #3b82f6;">Autonomous Action Execution</h2>
-        <p>Product <strong>{product_id}</strong> at Store <strong>{store_id}</strong> was evaluated.</p>
-        <p>Determined Action: <strong style="color: coral;">{action}</strong></p>
-        {context_html}
-        <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;"/>
-        <p style="color: #9ca3af; font-size: 12px;">This is an automated tactical action dispatched by the SRA RetailMind Autonomous Agent.</p>
+    <body style="font-family: Arial, sans-serif; color: #333;">
+        <h2 style="color: {'#d9534f' if is_urgent else '#337ab7'};">Tactical Agentic Execution</h2>
+        <p>Product <b>{product_id}</b> at Store <b>{store_id}</b> was evaluated with <b>{units} units</b> impact.</p>
+        <p><b>Determined Action:</b> <span style="color: orange; font-weight: bold;">{action}</span></p>
+        
+        <div style="background-color: #f9f9f9; padding: 15px; border-top: 2px solid #337ab7;">
+            <h3>AI Reasoning Log</h3>
+            <p><b>Agent Thought:</b> <i>"{thoughts}"</i></p>
+            {trace_html}
+        </div>
+        <p style="margin-top: 20px; font-size: 11px; color: #999;">
+            This is an automated tactical action dispatched by the RetailMind Autonomous Agent.
+        </p>
     </body>
     </html>
     """
-    message.attach(MIMEText(html_content, "html"))
+    msg.attach(MIMEText(html_body, 'html'))
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            if "gmail" in smtp_host:
-                server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(from_email, to_email, message.as_string())
-        print(f"✓ SMTP Alert successfully sent to {to_email}")
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, PASSWORD)
+            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+        logging.info(f"✓ SMTP Tactical Alert successfully sent to {RECEIVER_EMAIL}")
         return True
     except Exception as e:
-        print(f"❌ SMTP Error: {e}")
+        logging.error(f"❌ SMTP Tactical Error: {e}")
         return False
 
 def calculate_action_score(svm_confidence, shap_score_sum, sarima_trend_percent):
@@ -138,7 +160,7 @@ def send_executive_summary_email(report_json, metrics):
 
     message = MIMEMultipart("alternative")
     message["Subject"] = f"RetailMind Intelligence Pulse | {metrics.get('criticalAlerts', 0)} Alerts"
-    message["From"] = from_email
+    message["From"] = smtp_user
     message["To"] = to_email
 
     summary = report_json.get("summary", "No summary available.")
@@ -167,7 +189,7 @@ def send_executive_summary_email(report_json, metrics):
             <div style="margin-top: 20px; padding: 10px; background-color: #eef2ff; border-radius: 5px;">
                 <strong>Cycle Telemetry:</strong><br/>
                 Total Products: {metrics.get('totalProducts', 0)} | 
-                Forecast Accuracy: {metrics.get('forecastAccuracy', 0)}%
+                Critical Alerts: {metrics.get('criticalAlerts', 0)}
             </div>
         </div>
         <div style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
@@ -180,12 +202,11 @@ def send_executive_summary_email(report_json, metrics):
 
     try:
         with smtplib.SMTP(smtp_host, smtp_port) as server:
-            if "gmail" in smtp_host:
-                server.starttls()
+            server.starttls()
             server.login(smtp_user, smtp_pass)
-            server.sendmail(from_email, to_email, message.as_string())
-        print(f"✓ Executive Summary successfully sent to {to_email}")
+            server.sendmail(smtp_user, to_email, message.as_string())
+        logging.info(f"✓ Executive Summary successfully sent to {to_email}")
         return True
     except Exception as e:
-        print(f"❌ Report Email Failed: {e}")
+        logging.error(f"❌ Report Email Failed: {e}")
         return False

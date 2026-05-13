@@ -257,6 +257,13 @@ th {
 
 td {
     color: var(--text-primary);
+    vertical-align: top;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.audit-table td {
+    line-height: 1.5;
 }
 
 .badge-state {
@@ -465,4 +472,191 @@ td {
 .scraped-data-content ul li span {
     color: var(--text-primary);
     font-weight: 700;
+}
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    margin: 10% auto;
+    padding: 30px;
+    border-radius: 12px;
+    width: 70%;
+    max-width: 800px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    position: relative;
+    border: 1px solid var(--card-border);
+}
+
+/* Weights Breakdown */
+.weights-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 10px;
+    background: rgba(142, 149, 163, 0.05);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid rgba(142, 149, 163, 0.1);
+}
+
+.weight-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+}
+
+.weight-label {
+    color: var(--text-sec);
+    flex: 1;
+}
+
+.weight-bar-bg {
+    flex: 2;
+    height: 8px;
+    background: rgba(142, 149, 163, 0.1);
+    border-radius: 4px;
+    margin: 0 15px;
+    overflow: hidden;
+}
+
+.weight-bar-fill {
+    height: 100%;
+    background: var(--accent-blue);
+    border-radius: 4px;
+}
+
+.weight-val {
+    font-weight: bold;
+    color: var(--text-primary);
+    width: 50px;
+    text-align: right;
+}
+
+.technical-note {
+    background: linear-gradient(135deg, rgba(62, 139, 255, 0.05) 0%, rgba(67, 24, 255, 0.05) 100%);
+    padding: 20px;
+    border-radius: 12px;
+    border-left: 4px solid var(--accent-blue);
+}
+
+.technical-note h4 {
+    color: var(--accent-blue);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.technical-note p {
+    font-size: 0.9em;
+    color: var(--text-sec);
+    line-height: 1.5;
+}
+
+.thought-bubble {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 20px;
+    border-radius: 15px;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.close-modal {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.close-modal:hover {
+    color: var(--color-red);
+}
+
+.modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.modal-section h3 {
+    font-size: 14px;
+    color: var(--text-sec);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.trace-list {
+    list-style: none;
+}
+
+.trace-list li {
+    padding: 10px;
+    background: rgba(67, 24, 255, 0.03);
+    border-left: 3px solid var(--accent-blue);
+    margin-bottom: 8px;
+    font-size: 13px;
+    border-radius: 0 4px 4px 0;
+}
+
+.shap-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shap-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.shap-label { font-size: 12px; min-width: 100px; }
+.shap-bar-bg { flex: 1; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+.shap-bar-fill { height: 100%; background: var(--accent-blue); border-radius: 4px; }
+.shap-val { font-size: 11px; min-width: 40px; font-family: monospace; }
+
+.modal-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--card-border);
+}
+
+#modalThought {
+    font-style: italic;
+    color: var(--text-primary);
+    background: #fdfdfd;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px dashed var(--card-border);
+}
+
+.clickable-product {
+    color: var(--accent-blue);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.clickable-product:hover {
+    color: var(--accent-blue-hover);
+    font-weight: 600;
 }
