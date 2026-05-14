@@ -240,15 +240,12 @@ class AdvancedReasoningEngine:
         path = "Unknown"
         action = "No Action"
         
-        if score < 0.35:
+        if score < 0.25:
             path = "Step 7: Baseline Continuity"
             action = "Routine Monitoring"
-            trace.append(f"4. Score {round(score, 2)} < 0.35 (Nominal) -> Routing to Routine Monitoring.")
-        elif score < 0.50:
-            path = "Step 4: Ambiguous Signal"
-            action = "Escalate to Human Agent"
-            trace.append(f"4. Score {round(score, 2)} < 0.50 (Ambiguous) -> Escalating for High-Priority Human Audit.")
-        elif 0.50 <= score <= 0.8:
+            trace.append(f"4. Score {round(score, 2)} < 0.25 (Nominal) -> Routing to Routine Monitoring.")
+        elif 0.25 <= score < 0.70:
+            # TIER 2: EVIDENCE-BASED (PEER REVIEW)
             if self.knn_index:
                 combined_v = np.hstack([current_v, current_shap]).reshape(1, -1)
                 dists, idx = self.knn_index.kneighbors(combined_v)
@@ -256,41 +253,41 @@ class AdvancedReasoningEngine:
                 majority_vote = max(set(votes), key=votes.count)
                 consensus_count = votes.count(majority_vote)
                 
-                # Success Measure 2: Mean Distance (Similarity Score)
                 mean_dist = np.mean(dists)
-                similarity_reliability = np.clip(1.0 - (mean_dist / 2.0), 0.0, 1.0) # Normalized scale
+                similarity_reliability = np.clip(1.0 - (mean_dist / 2.0), 0.0, 1.0)
                 
-                trace.append(f"4. RAG Retrieval Executed. Consensus: {consensus_count}/5 | Similarity: {round(similarity_reliability, 2)}")
+                trace.append(f"4. Historical RAG Check (Score: {round(score, 2)}). Consensus: {consensus_count}/5 | Sim: {round(similarity_reliability, 2)}")
                 
-                if consensus_count < 3 or similarity_reliability < 0.4:
-                    path = "Step 5: RAG Consensus Failure"
-                    action = "Human Audit Required"
-                    reason = "Weak Majority" if consensus_count < 3 else "Low Similarity (Distal Neighbors)"
-                    trace.append(f"5. Result: {reason} -> Divergent history requires Manual Audit.")
-                else:
-                    path = f"Step 3: RAG Consensus ({majority_vote})"
+                if consensus_count >= 3 and similarity_reliability >= 0.4:
+                    path = f"Step 3: RAG Autonomy ({majority_vote})"
                     action = f"Execute {majority_vote} (Verified via History)"
-                    trace.append(f"5. Result: Strong Consensus + High Similarity. Deploying autonomous '{majority_vote}' strategy.")
-            else:
-                path = "Step 6: RAG Index Unavailable"
-                action = "SHAP-Guided Default"
-                trace.append("4. RAG Index missing. Falling back to default SHAP deviation metrics.")
-        elif score > 0.8:
-            if reliability > 0.85:
-                path = "Step 1: Direct Autonomy"
-                action = "Automated High-Priority Execution"
-                trace.append("4. Critical Score + High Reliability -> Dispatching fully autonomous tactical order.")
-            else:
-                path = "Step 2: Realization Check"
-                dom_idx = int(np.argmax(np.abs(current_shap)))
-                trace.append(f"4. Potential Anomaly Detected. Initializing SHAP Verification (Dominant Index: {dom_idx})")
-                
-                if abs(current_shap[dom_idx]) > 0.05:
-                    action = "Automated Order (SHAP Verified)"
-                    trace.append(f"5. Verification SUCCESS: Driver Feature {dom_idx} confirms deviant state. Realizing.")
+                    trace.append(f"5. Result: History confirms '{majority_vote}'. Proceeding autonomously.")
                 else:
-                    action = "Escalate to Human (SHAP Failed)"
-                    trace.append(f"5. Verification FAILED: Drivers below significance threshold. Escalating to prevent false positive.")
+                    path = "Step 5: RAG Divergence"
+                    action = "Human Audit Required"
+                    trace.append("5. Result: Conflicting history. Escalating for manual validation.")
+            else:
+                path = "Step 6: Fallback"
+                action = "Routine Monitoring (No History)"
+                trace.append("4. RAG Index missing. Baseline continuity maintained.")
+        elif 0.70 <= score < 0.90:
+            # TIER 3: STRUCTURAL REALIZATION (SHAP)
+            dom_idx = int(np.argmax(np.abs(current_shap)))
+            trace.append(f"4. Anomaly Probe (Score: {round(score, 2)}). Verifying Drivers (Index: {dom_idx})")
+            
+            if abs(current_shap[dom_idx]) > 0.05:
+                path = "Step 2: SHAP Autonomy"
+                action = "Automated Order (SHAP Verified)"
+                trace.append(f"5. Result: Driver Significance {round(current_shap[dom_idx], 3)} confirms state. Executing.")
+            else:
+                path = "Step 4: Driver Mismatch"
+                action = "Human Audit Required"
+                trace.append("5. Result: Drivers below threshold. Escalating to prevent false discovery.")
+        else: # score >= 0.90
+            # TIER 4: DIRECT TACTICAL DISPATCH
+            path = "Step 1: Direct Autonomy"
+            action = "Automated High-Priority Execution"
+            trace.append(f"4. Critical Score {round(score, 2)} -> Dispatching Tactical Tactical Order.")
         
         if action == "Routine Monitoring":
             thoughts = "Healthy baseline observed. Product behavior aligns with statistical norm."

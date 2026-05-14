@@ -210,11 +210,30 @@ async def run_full_pipeline():
                 context=react_result
             )
 
-            # --- DRIFT DETECTION (Outer Loop) ---
+            # --- DUAL-SIGNAL DRIFT DETECTION ---
+            # Signal 1: SVM Gap Decay
             global_state["drift_signals"]["svm_gap_history"].append(gap)
             if len(global_state["drift_signals"]["svm_gap_history"]) > 7:
                 global_state["drift_signals"]["svm_gap_history"].pop(0)
             gap_ma = np.mean(global_state["drift_signals"]["svm_gap_history"])
+
+            # Signal 2: SHAP Magnitude Collapse
+            dom_shap_magnitude = float(np.max(np.abs(current_shap))) if isinstance(current_shap, np.ndarray) else 0.1
+            if "shap_magnitude_history" not in global_state["drift_signals"]:
+                global_state["drift_signals"]["shap_magnitude_history"] = []
+            global_state["drift_signals"]["shap_magnitude_history"].append(dom_shap_magnitude)
+            if len(global_state["drift_signals"]["shap_magnitude_history"]) > 7:
+                global_state["drift_signals"]["shap_magnitude_history"].pop(0)
+            shap_ma = np.mean(global_state["drift_signals"]["shap_magnitude_history"])
+
+            # Drift condition: SVM certainty decayed OR SHAP explanations collapsed
+            svm_drift = len(global_state["drift_signals"]["svm_gap_history"]) >= 7 and gap_ma < 0.15
+            shap_drift = len(global_state["drift_signals"]["shap_magnitude_history"]) >= 7 and shap_ma < 0.02
+            if svm_drift or shap_drift:
+                drift_reason = "SVM Gap" if svm_drift else "SHAP Collapse"
+                logging.warning(f"[ARL] Drift detected via {drift_reason} (SVM_MA={round(gap_ma,3)}, SHAP_MA={round(shap_ma,4)}). Re-clustering will trigger on next cycle.")
+                global_state["drift_signals"]["svm_gap_history"].clear()
+                global_state["drift_signals"]["shap_magnitude_history"].clear()
             
             # Populate monitoring zones
             num_products = int(len(clustered_df))
